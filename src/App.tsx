@@ -7,16 +7,16 @@ import {
   compose,
   identity,
   Matrix,
-  scale,
+  scale as scaleMatrix,
   translate,
+  toCSS,
+  inverse,
 } from "transformation-matrix"
 import { getMousePosInElm } from "./getMousePosInElm"
 
 function App() {
   const [containerElm, setContainerElm] = createSignal<HTMLDivElement>()
-  const [baseTransform, setBaseTransform] = createSignal(identity())
-  const [activeModificationTransform, setActiveModificationTransform] =
-    createSignal(identity())
+  const [realToScreenMat, setRealToScreenMat] = createSignal(identity())
 
   createEffect(() => {
     const container = containerElm()
@@ -25,37 +25,49 @@ function App() {
     let isMouseDown = false
     let mouseDownAt: { x: number; y: number } | null = null
     let lastMouseMoveAt: { x: number; y: number } | null = null
+    let preDragRealToScreenMat: Matrix | null = null
 
     const handleMouseMove = (e: MouseEvent) => {
       if (!isMouseDown) return
       lastMouseMoveAt = getMousePosInElm(container, e)
-      const delta = {
+      const deltaReal = {
         x: lastMouseMoveAt.x - mouseDownAt!.x,
         y: lastMouseMoveAt.y - mouseDownAt!.y,
       }
-      setActiveModificationTransform(translate(delta.x, delta.y))
+      setRealToScreenMat(
+        compose(
+          preDragRealToScreenMat!,
+          translate(
+            deltaReal.x / preDragRealToScreenMat!.a,
+            deltaReal.y / preDragRealToScreenMat!.d,
+          ),
+        ),
+      )
     }
     const handleMouseDown = (e: MouseEvent) => {
       isMouseDown = true
       mouseDownAt = getMousePosInElm(container, e)
+      preDragRealToScreenMat = realToScreenMat()
     }
     const handleMouseUp = (e: MouseEvent) => {
       isMouseDown = false
       mouseDownAt = null
       lastMouseMoveAt = null
-      setBaseTransform(compose(baseTransform(), activeModificationTransform()))
-      setActiveModificationTransform(identity())
+      // setBaseTransform(
+      //   compose(realToScreenMat(), activeModificationTransform()),
+      // )
+      // setActiveModificationTransform(identity())
     }
     const handleWheel = (e: WheelEvent) => {
-      const center = getMousePosInElm(container, e)
-      // const factor = 1 - e.deltaY / 1000
-      // const newTf = compose(
-      //   translate(center.x, center.y),
-      //   scale(factor, factor),
-      //   translate(-center.x, -center.y),
-      //   baseTransform(),
-      // )
-      // setBaseTransform(newTf)
+      const centerScreen = getMousePosInElm(container, e)
+      const factor = 1 - e.deltaY / 1000
+      const newRealToScreenMat = compose(
+        translate(centerScreen.x, centerScreen.y),
+        scaleMatrix(factor, factor),
+        translate(-centerScreen.x, -centerScreen.y),
+        realToScreenMat(),
+      )
+      setRealToScreenMat(newRealToScreenMat)
       e.preventDefault()
     }
 
@@ -72,33 +84,43 @@ function App() {
     })
   })
 
-  const transform = createMemo(() =>
-    compose(baseTransform(), activeModificationTransform()),
-  )
+  const transform = createMemo(() => realToScreenMat())
 
   const boxPos = createMemo(() => applyToPoint(transform(), { x: 0, y: 0 }))
   const scale = createMemo(() => transform().a)
 
+  const cssTransform = createMemo(() => toCSS(transform()))
+
   return (
-    <div style={{ width: "100vw", height: "100vh" }} ref={setContainerElm}>
-      <h1
-        style={{
-          transform: `translate(${boxPos().x}px, ${boxPos().y}px) scale(${scale()})`,
-          "transform-origin": "0,0",
-        }}
-      >
-        Hello World
-      </h1>
+    <div
+      style={{
+        width: "500px",
+        height: "500px",
+        "background-color": "white",
+        overflow: "hidden",
+      }}
+      ref={setContainerElm}
+    >
       <div
         style={{
-          left: `${boxPos().x}px`,
-          top: `${boxPos().y}px`,
-          width: `${100 * scale()}px`,
-          height: `${100 * scale()}px`,
-          "background-color": "red",
-          position: "absolute",
+          transform: cssTransform(),
+          "transform-origin": "0 0",
+          display: "grid",
+          "grid-template-columns": "repeat(3, 1fr)",
+          "grid-template-rows": "repeat(3, 1fr)",
+          gap: "20px",
         }}
-      />
+      >
+        {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => (
+          <div
+            style={{
+              width: "100px",
+              height: "100px",
+              "background-color": "red",
+            }}
+          />
+        ))}
+      </div>
     </div>
   )
 }
