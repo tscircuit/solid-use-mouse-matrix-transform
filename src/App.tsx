@@ -2,23 +2,49 @@ import { createEffect, createSignal, onCleanup } from "solid-js"
 import solidLogo from "./assets/solid.svg"
 import viteLogo from "/vite.svg"
 import "./App.css"
-import { applyToPoint, identity } from "transformation-matrix"
+import {
+  applyToPoint,
+  compose,
+  identity,
+  Matrix,
+  translate,
+} from "transformation-matrix"
+import { getMousePosInElm } from "./getMousePosInElm"
 
 function App() {
   const [containerElm, setContainerElm] = createSignal<HTMLDivElement>()
-  const [userToScreenTransform, setUserToScreenTransform] = createSignal(
-    identity(),
-  )
+  const [baseTransform, setBaseTransform] = createSignal(identity())
+  const [activeModificationTransform, setActiveModificationTransform] =
+    createSignal(identity())
 
   createEffect(() => {
     const container = containerElm()
     if (!container) return
 
-    const handleMouseMove = (e: MouseEvent) => {}
-    const handleMouseDown = (e: MouseEvent) => {
-      console.log("Mouse down", e.clientX, e.clientY)
+    let isMouseDown = false
+    let mouseDownAt: { x: number; y: number } | null = null
+    let lastMouseMoveAt: { x: number; y: number } | null = null
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isMouseDown) return
+      lastMouseMoveAt = getMousePosInElm(container, e)
+      const delta = {
+        x: lastMouseMoveAt.x - mouseDownAt!.x,
+        y: lastMouseMoveAt.y - mouseDownAt!.y,
+      }
+      setActiveModificationTransform(translate(delta.x, delta.y))
     }
-    const handleMouseUp = (e: MouseEvent) => {}
+    const handleMouseDown = (e: MouseEvent) => {
+      isMouseDown = true
+      mouseDownAt = getMousePosInElm(container, e)
+    }
+    const handleMouseUp = (e: MouseEvent) => {
+      isMouseDown = false
+      mouseDownAt = null
+      lastMouseMoveAt = null
+      setBaseTransform(compose(baseTransform(), activeModificationTransform()))
+      setActiveModificationTransform(identity())
+    }
 
     container.addEventListener("mousemove", handleMouseMove)
     container.addEventListener("mousedown", handleMouseDown)
@@ -31,8 +57,10 @@ function App() {
     })
   })
 
-  const boxPos = applyToPoint(userToScreenTransform(), { x: 0, y: 0 })
-  const scale = userToScreenTransform().a
+  const transform = compose(baseTransform(), activeModificationTransform())
+
+  const boxPos = applyToPoint(transform, { x: 0, y: 0 })
+  const scale = transform.a
 
   return (
     <div style={{ width: "100vw", height: "100vh" }} ref={setContainerElm}>
