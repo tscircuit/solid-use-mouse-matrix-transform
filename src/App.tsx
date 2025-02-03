@@ -10,7 +10,6 @@ import {
   scale as scaleMatrix,
   translate,
   toCSS,
-  inverse,
 } from "transformation-matrix"
 import { getMousePosInElm } from "./getMousePosInElm"
 
@@ -53,10 +52,6 @@ function App() {
       isMouseDown = false
       mouseDownAt = null
       lastMouseMoveAt = null
-      // setBaseTransform(
-      //   compose(realToScreenMat(), activeModificationTransform()),
-      // )
-      // setActiveModificationTransform(identity())
     }
     const handleWheel = (e: WheelEvent) => {
       const centerScreen = getMousePosInElm(container, e)
